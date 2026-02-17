@@ -63,7 +63,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, onNav }) => {
           amount={totalRevenue}
           currency={state.profile.currency}
           icon="fa-sack-dollar"
-          className="bg-indigo-600 text-white"
+          className="bg-teal-500 text-white"
         />
         <KPICard
           label="Expenses"

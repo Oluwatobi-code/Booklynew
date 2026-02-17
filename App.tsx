@@ -4,53 +4,30 @@ import { AppState, BusinessProfile, Order, Product, Customer, Expense } from './
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Inventory from './pages/Inventory';
+import Orders from './pages/Orders';
 import Expenses from './pages/Expenses';
 import Settings from './pages/Settings';
 import { extractOrderFromText } from './geminiService';
 
 const INITIAL_PROFILE: BusinessProfile = {
-  name: 'Lagos Urban Styles',
+  name: 'My Business',
   currency: 'NGN',
-  phone: '+234 812 345 6789',
-  email: 'sales@lagosurban.com',
-  footerNote: 'Thank you for shopping with us!',
+  phone: '',
+  email: '',
+  footerNote: 'Thank you for your patronage!',
   vipThreshold: 5
 };
 
-const DUMMY_PRODUCTS: Product[] = [
-  { id: 'p1', name: 'Agbada Classic Blue', costPrice: 15000, sellingPrice: 35000, stock: 12, lowStockThreshold: 5 },
-  { id: 'p2', name: 'Ankara Heels Red', costPrice: 8000, sellingPrice: 18000, stock: 4, lowStockThreshold: 5 },
-  { id: 'p3', name: 'Native Cap (Fila)', costPrice: 2500, sellingPrice: 6500, stock: 2, lowStockThreshold: 5 },
-];
-
-const DUMMY_EXPENSES: Expense[] = [
-  { id: 'e1', category: 'Transport', amount: 2500, date: new Date().toISOString(), note: 'Delivery to Island' },
-  { id: 'e2', category: 'Data', amount: 5000, date: new Date().toISOString(), note: 'Monthly Sub' }
-];
-
-const DUMMY_ORDERS: Order[] = [
-  {
-    id: 'ord_001',
-    customerName: 'Chidi Okafor',
-    items: [{ id: 'i1', name: 'Agbada Classic Blue', quantity: 1, price: 35000 }],
-    total: 35000,
-    date: new Date().toISOString(),
-    status: 'Paid',
-    source: 'WhatsApp',
-    paymentMethod: 'Transfer',
-  }
-];
-
 const App: React.FC = () => {
   const [state, setState] = useState<AppState>(() => {
-    const saved = localStorage.getItem('bookly_mvp_state_v3');
+    const saved = localStorage.getItem('bookly_mvp_state_v4');
     const initialState = saved ? JSON.parse(saved) : {
       isLoggedIn: false,
       profile: INITIAL_PROFILE,
-      orders: DUMMY_ORDERS,
-      products: DUMMY_PRODUCTS,
+      orders: [],
+      products: [],
       customers: [],
-      expenses: DUMMY_EXPENSES,
+      expenses: [],
       settings: { showFab: true, soundEnabled: false }
     };
     // Ensure settings exist for legacy state
@@ -92,7 +69,7 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const { isOnline, ...rest } = state;
-    localStorage.setItem('bookly_mvp_state_v3', JSON.stringify(rest));
+    localStorage.setItem('bookly_mvp_state_v4', JSON.stringify(rest));
   }, [state]);
 
   const addExpense = (expense: Expense) => {
@@ -186,6 +163,7 @@ const App: React.FC = () => {
   const renderContent = () => {
     switch (activeTab) {
       case 'dashboard': return <Dashboard state={state} onNav={setActiveTab} />;
+      case 'orders': return <Orders state={state} />;
       case 'inventory': return <Inventory state={state} onUpdateProducts={(p) => setState(prev => ({ ...prev, products: p }))} />;
       case 'expenses': return <Expenses state={state} onAddExpense={addExpense} />;
       case 'settings': return <Settings profile={state.profile} settings={state.settings} onUpdateProfile={(p) => setState(prev => ({ ...prev, profile: p }))} onUpdateSettings={(s) => setState(prev => ({ ...prev, settings: s }))} onLogout={() => setState(prev => ({ ...prev, isLoggedIn: false }))} />;
@@ -219,7 +197,7 @@ const App: React.FC = () => {
       </main>
 
       {/* Floating Action Button */}
-      {state.settings.showFab && (
+      {activeTab === 'dashboard' && state.settings.showFab && (
         <>
           {showFabMenu && (
             <div className="absolute inset-0 bg-slate-900/20 backdrop-blur-sm z-40 transition-all" onClick={() => setShowFabMenu(false)}></div>
@@ -368,6 +346,7 @@ const App: React.FC = () => {
       {/* Navigation */}
       <nav className="absolute bottom-0 left-0 right-0 bg-white border-t border-slate-100 flex justify-around py-4 pb-6 px-2 z-40 max-w-md mx-auto">
         <NavButton active={activeTab === 'dashboard'} icon="fa-chart-pie" label="Insights" onClick={() => setActiveTab('dashboard')} />
+        <NavButton active={activeTab === 'orders'} icon="fa-receipt" label="Orders" onClick={() => setActiveTab('orders')} />
         <NavButton active={activeTab === 'inventory'} icon="fa-layer-group" label="Stock" onClick={() => setActiveTab('inventory')} />
         <NavButton active={activeTab === 'expenses'} icon="fa-wallet" label="Expenses" onClick={() => setActiveTab('expenses')} />
       </nav>
