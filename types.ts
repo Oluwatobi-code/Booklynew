@@ -27,7 +27,7 @@ export interface Order {
   items: OrderItem[];
   total: number;
   date: string;
-  status: 'Paid' | 'Pending';
+  status: 'Paid' | 'Pending' | 'Delivered';
   source: SalesSource;
   paymentMethod: 'Cash' | 'Wallet' | 'Transfer';
   note?: string;

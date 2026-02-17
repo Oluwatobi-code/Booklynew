@@ -5,6 +5,7 @@ import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Inventory from './pages/Inventory';
 import Orders from './pages/Orders';
+import Customers from './pages/Customers';
 import Expenses from './pages/Expenses';
 import Settings from './pages/Settings';
 import { extractOrderFromText } from './geminiService';
@@ -166,8 +167,9 @@ const App: React.FC = () => {
   const renderContent = () => {
     switch (activeTab) {
       case 'dashboard': return <Dashboard state={state} onNav={setActiveTab} />;
-      case 'orders': return <Orders state={state} />;
+      case 'orders': return <Orders state={state} onUpdateOrders={(orders) => setState(prev => ({ ...prev, orders }))} />;
       case 'inventory': return <Inventory state={state} onUpdateProducts={(p) => setState(prev => ({ ...prev, products: p }))} />;
+      case 'customers': return <Customers state={state} />;
       case 'expenses': return <Expenses state={state} onAddExpense={addExpense} />;
       case 'settings': return <Settings profile={state.profile} settings={state.settings} onUpdateProfile={(p) => setState(prev => ({ ...prev, profile: p }))} onUpdateSettings={(s) => setState(prev => ({ ...prev, settings: s }))} onLogout={() => setState(prev => ({ ...prev, isLoggedIn: false }))} />;
       default: return <Dashboard state={state} onNav={setActiveTab} />;
@@ -423,11 +425,12 @@ const App: React.FC = () => {
       )}
 
       {/* Navigation */}
-      <nav className="absolute bottom-0 left-0 right-0 bg-white border-t border-slate-100 flex justify-around py-4 pb-6 px-2 z-40 max-w-md mx-auto">
-        <NavButton active={activeTab === 'dashboard'} icon="fa-chart-pie" label="Insights" onClick={() => setActiveTab('dashboard')} />
+      <nav className="absolute bottom-0 left-0 right-0 bg-white border-t border-slate-100 flex justify-around py-3 pb-5 px-1 z-40 max-w-md mx-auto">
+        <NavButton active={activeTab === 'dashboard'} icon="fa-chart-pie" label="Home" onClick={() => setActiveTab('dashboard')} />
         <NavButton active={activeTab === 'orders'} icon="fa-receipt" label="Orders" onClick={() => setActiveTab('orders')} />
         <NavButton active={activeTab === 'inventory'} icon="fa-layer-group" label="Stock" onClick={() => setActiveTab('inventory')} />
-        <NavButton active={activeTab === 'expenses'} icon="fa-wallet" label="Expenses" onClick={() => setActiveTab('expenses')} />
+        <NavButton active={activeTab === 'customers'} icon="fa-users" label="CRM" onClick={() => setActiveTab('customers')} />
+        <NavButton active={activeTab === 'expenses'} icon="fa-wallet" label="Costs" onClick={() => setActiveTab('expenses')} />
       </nav>
     </div>
   );
