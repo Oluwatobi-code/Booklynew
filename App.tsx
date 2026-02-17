@@ -59,6 +59,9 @@ const App: React.FC = () => {
   const [aiInputText, setAiInputText] = useState('');
   const [isProcessingAI, setIsProcessingAI] = useState(false);
 
+  // Receipt Modal State
+  const [receiptOrder, setReceiptOrder] = useState<Order | null>(null);
+
   useEffect(() => {
     const handleOnline = () => setState(prev => ({ ...prev, isOnline: true }));
     const handleOffline = () => setState(prev => ({ ...prev, isOnline: false }));
@@ -98,7 +101,7 @@ const App: React.FC = () => {
       setState(prev => ({ ...prev, orders: [newOrder, ...prev.orders] }));
       setShowManualSale(false);
       setManualSaleForm({ customerName: 'Guest', items: [{ id: Date.now().toString(), name: 'Item 1', quantity: 1, price: 0 }], note: '', source: 'Walk-in' });
-      alert('Sale Recorded Successfully!');
+      setReceiptOrder(newOrder);
     }
   };
 
@@ -337,6 +340,82 @@ const App: React.FC = () => {
                 className="w-full bg-purple-600 text-white py-4 rounded-xl font-black text-sm shadow-xl shadow-purple-200 mt-4 flex justify-center items-center gap-2"
               >
                 {isProcessingAI ? <i className="fa-solid fa-circle-notch animate-spin"></i> : 'Process Order'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Receipt / Invoice Modal */}
+      {receiptOrder && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white w-full max-w-[380px] rounded-[28px] shadow-2xl animate-in slide-in-from-bottom-10 overflow-hidden">
+            {/* Receipt Header */}
+            <div className="bg-teal-500 px-6 py-5 text-center text-white">
+              <div className="w-12 h-12 bg-white/20 rounded-full mx-auto flex items-center justify-center mb-3">
+                <i className="fa-solid fa-check text-xl"></i>
+              </div>
+              <h3 className="text-lg font-black">Sale Recorded!</h3>
+              <p className="text-teal-100 text-xs font-medium mt-1">Invoice #{receiptOrder.id.slice(-6)}</p>
+            </div>
+
+            {/* Receipt Body */}
+            <div className="px-6 py-5 space-y-4">
+              {/* Business & Customer Info */}
+              <div className="flex justify-between items-start text-xs">
+                <div>
+                  <p className="font-black text-slate-900">{state.profile.name || 'Bookly'}</p>
+                  {state.profile.phone && <p className="text-slate-400">{state.profile.phone}</p>}
+                </div>
+                <div className="text-right">
+                  <p className="font-bold text-slate-700">{receiptOrder.customerName}</p>
+                  <p className="text-slate-400">{new Date(receiptOrder.date).toLocaleDateString('en-NG', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
+                </div>
+              </div>
+
+              {/* Divider */}
+              <div className="border-t border-dashed border-slate-200"></div>
+
+              {/* Items */}
+              <div className="space-y-2">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Items</p>
+                {receiptOrder.items.map((item, idx) => (
+                  <div key={idx} className="flex justify-between text-xs">
+                    <span className="text-slate-600 font-medium">{item.quantity}x {item.name}</span>
+                    <span className="text-slate-800 font-bold">{state.profile.currency}{(item.price * item.quantity).toLocaleString()}</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Divider */}
+              <div className="border-t border-dashed border-slate-200"></div>
+
+              {/* Total */}
+              <div className="flex justify-between items-center">
+                <span className="text-sm font-black text-slate-900 uppercase">Total</span>
+                <span className="text-2xl font-black text-teal-600">{state.profile.currency}{receiptOrder.total.toLocaleString()}</span>
+              </div>
+
+              {/* Meta */}
+              <div className="flex gap-2 text-[10px] font-bold text-slate-400">
+                <span className="bg-slate-100 px-2 py-1 rounded-lg">{receiptOrder.source}</span>
+                <span className="bg-slate-100 px-2 py-1 rounded-lg">{receiptOrder.paymentMethod}</span>
+                <span className="bg-emerald-50 text-emerald-600 px-2 py-1 rounded-lg">{receiptOrder.status}</span>
+              </div>
+
+              {/* Footer Note */}
+              {state.profile.footerNote && (
+                <p className="text-center text-[10px] text-slate-400 italic pt-2">{state.profile.footerNote}</p>
+              )}
+            </div>
+
+            {/* Confirm Button */}
+            <div className="px-6 pb-6">
+              <button
+                onClick={() => setReceiptOrder(null)}
+                className="w-full bg-teal-500 text-white py-4 rounded-2xl font-black text-sm shadow-lg shadow-teal-200 hover:bg-teal-600 transition-all active:scale-95"
+              >
+                Done
               </button>
             </div>
           </div>
