@@ -132,29 +132,25 @@ const App: React.FC = () => {
     if (!aiInputText) return;
     setIsProcessingAI(true);
     try {
-      // Attempt to use the real service if API key is present (env check logic usually in service)
-      // For MVP demo, simulating intelligent extraction if key fails or is missing
-      const result = await extractOrderFromText(aiInputText).catch(() => null);
+      const result = await extractOrderFromText(aiInputText, state.products);
 
-      if (result && result.totalAmount) {
+      if (result && result.items.length > 0) {
         setManualSaleForm({
-          customerName: result.customerName || 'Unknown',
-          items: result.items || [],
-          note: `Extracted from: ${result.source}`,
+          customerName: result.customerName || 'Walk-in Customer',
+          items: result.items,
+          note: `AI captured from text`,
           source: result.source || 'Other'
         });
         setShowAICapture(false);
         setShowManualSale(true);
       } else {
-        // Fallback demo logic if API fails
-        setManualSaleForm({
-          customerName: 'Extracted Customer',
-          items: [{ id: '1', name: 'Unknown Item', quantity: 1, price: 0 }],
-          note: aiInputText.substring(0, 50) + '...',
-          source: 'WhatsApp'
-        });
-        setShowAICapture(false);
-        setShowManualSale(true);
+        // No products matched — show helpful message
+        const productNames = state.products.map(p => p.name).join(', ');
+        alert(
+          state.products.length === 0
+            ? 'No products in inventory yet. Add products first, then AI can match them from text.'
+            : `Could not match any products from the text.\n\nYour inventory: ${productNames}\n\nTry pasting text that mentions one of these products.`
+        );
       }
     } catch (e) {
       alert('AI Processing failed. Please enter manually.');
