@@ -1,14 +1,19 @@
 
 import React, { useState } from 'react';
-import { AppState } from '../types';
+import { AppState, Customer } from '../types';
 
 interface CustomersProps {
   state: AppState;
+  onAddCustomer: (customer: Customer) => void;
 }
 
-const Customers: React.FC<CustomersProps> = ({ state }) => {
+const Customers: React.FC<CustomersProps> = ({ state, onAddCustomer }) => {
   const [search, setSearch] = useState('');
   const [tierFilter, setTierFilter] = useState<string>('All');
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [newPhone, setNewPhone] = useState('');
+  const [newEmail, setNewEmail] = useState('');
 
   // Build customer list from orders
   const customersFromOrders = () => {
@@ -33,7 +38,31 @@ const Customers: React.FC<CustomersProps> = ({ state }) => {
     }));
   };
 
-  const customers = customersFromOrders()
+  // Merge order-derived customers with manually added customers
+  const mergedCustomers = () => {
+    const fromOrders = customersFromOrders();
+    const orderKeys = new Set(fromOrders.map(c => c.name.toLowerCase().trim()));
+
+    // Add manually-added customers that don't already appear from orders
+    const manualOnly = (state.customers || [])
+      .filter(mc => !orderKeys.has(mc.name.toLowerCase().trim()))
+      .map(mc => ({
+        name: mc.name,
+        orderCount: mc.orderCount || 0,
+        totalSpent: mc.totalSpent || 0,
+        lastOrderDate: mc.lastOrderDate || '',
+        tier: mc.tier || 'New' as const,
+        channels: [] as string[],
+        phone: mc.phone || '',
+        email: mc.email || ''
+      }));
+
+    return [...fromOrders, ...manualOnly];
+  };
+
+  const allCustomers = mergedCustomers();
+
+  const customers = allCustomers
     .sort((a, b) => b.totalSpent - a.totalSpent)
     .filter(c => tierFilter === 'All' || c.tier === tierFilter)
     .filter(c => {
@@ -42,10 +71,10 @@ const Customers: React.FC<CustomersProps> = ({ state }) => {
     });
 
   const tierCounts = {
-    All: customersFromOrders().length,
-    VIP: customersFromOrders().filter(c => c.tier === 'VIP').length,
-    Returning: customersFromOrders().filter(c => c.tier === 'Returning').length,
-    New: customersFromOrders().filter(c => c.tier === 'New').length
+    All: allCustomers.length,
+    VIP: allCustomers.filter(c => c.tier === 'VIP').length,
+    Returning: allCustomers.filter(c => c.tier === 'Returning').length,
+    New: allCustomers.filter(c => c.tier === 'New').length
   };
 
   const tierStyles = {
@@ -60,7 +89,7 @@ const Customers: React.FC<CustomersProps> = ({ state }) => {
       ...customers.map(c => [
         c.name, c.tier, c.orderCount.toString(),
         c.totalSpent.toString(),
-        new Date(c.lastOrderDate).toLocaleDateString(),
+        c.lastOrderDate ? new Date(c.lastOrderDate).toLocaleDateString() : '—',
         c.channels.join(', ')
       ])
     ];
@@ -73,6 +102,26 @@ const Customers: React.FC<CustomersProps> = ({ state }) => {
     document.body.removeChild(link);
   };
 
+  const handleAddCustomer = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newName.trim()) return;
+
+    const customer: Customer = {
+      id: Date.now().toString(),
+      name: newName.trim(),
+      phone: newPhone.trim() || undefined,
+      email: newEmail.trim() || undefined,
+      tier: 'New',
+      totalSpent: 0,
+      orderCount: 0
+    };
+    onAddCustomer(customer);
+    setNewName('');
+    setNewPhone('');
+    setNewEmail('');
+    setShowAddModal(false);
+  };
+
   return (
     <div className="space-y-5">
       <div className="flex justify-between items-center">
@@ -80,11 +129,19 @@ const Customers: React.FC<CustomersProps> = ({ state }) => {
           <h2 className="text-2xl font-black text-slate-900 tracking-tight">Customers</h2>
           <p className="text-slate-500 text-xs font-medium">Sorted by lifetime value</p>
         </div>
-        {customers.length > 0 && (
-          <button onClick={exportCRM} className="bg-slate-900 text-white px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 shadow-lg">
-            <i className="fa-solid fa-download"></i> Export
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="bg-teal-500 text-white px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 shadow-lg shadow-teal-200 hover:bg-teal-600 transition-all active:scale-95"
+          >
+            <i className="fa-solid fa-user-plus"></i> Add
           </button>
-        )}
+          {customers.length > 0 && (
+            <button onClick={exportCRM} className="bg-slate-900 text-white px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 shadow-lg">
+              <i className="fa-solid fa-download"></i> Export
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Search */}
@@ -108,11 +165,11 @@ const Customers: React.FC<CustomersProps> = ({ state }) => {
             key={tier}
             onClick={() => setTierFilter(tier)}
             className={`flex-shrink-0 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${tierFilter === tier
-                ? tier === 'VIP' ? 'bg-amber-500 text-white shadow-md' :
-                  tier === 'Returning' ? 'bg-teal-500 text-white shadow-md' :
-                    tier === 'New' ? 'bg-slate-700 text-white shadow-md' :
-                      'bg-teal-500 text-white shadow-md shadow-teal-200'
-                : 'bg-white text-slate-500 border border-slate-100'
+              ? tier === 'VIP' ? 'bg-amber-500 text-white shadow-md' :
+                tier === 'Returning' ? 'bg-teal-500 text-white shadow-md' :
+                  tier === 'New' ? 'bg-slate-700 text-white shadow-md' :
+                    'bg-teal-500 text-white shadow-md shadow-teal-200'
+              : 'bg-white text-slate-500 border border-slate-100'
               }`}
           >
             {tier === 'All' ? '👥' : tier === 'VIP' ? '👑' : tier === 'Returning' ? '🔄' : '✨'} {tier}
@@ -131,10 +188,12 @@ const Customers: React.FC<CustomersProps> = ({ state }) => {
               <i className="fa-solid fa-users text-2xl text-slate-300"></i>
             </div>
             <p className="text-sm font-bold text-slate-400">
-              {state.orders.length === 0 ? 'No customers yet' : 'No matching customers'}
+              {state.orders.length === 0 && (state.customers || []).length === 0 ? 'No customers yet' : 'No matching customers'}
             </p>
             <p className="text-xs text-slate-300">
-              {state.orders.length === 0 ? 'Customers are created from sales.' : 'Try adjusting your search or filters.'}
+              {state.orders.length === 0 && (state.customers || []).length === 0
+                ? 'Add customers manually or they appear from sales.'
+                : 'Try adjusting your search or filters.'}
             </p>
           </div>
         ) : (
@@ -142,8 +201,8 @@ const Customers: React.FC<CustomersProps> = ({ state }) => {
             <div key={idx} className="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm flex justify-between items-center">
               <div className="flex items-center gap-3">
                 <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-lg font-black shadow-inner ${customer.tier === 'VIP' ? 'bg-amber-50 text-amber-600' :
-                    customer.tier === 'Returning' ? 'bg-teal-50 text-teal-600' :
-                      'bg-slate-100 text-slate-500'
+                  customer.tier === 'Returning' ? 'bg-teal-50 text-teal-600' :
+                    'bg-slate-100 text-slate-500'
                   }`}>
                   {customer.name.charAt(0).toUpperCase()}
                 </div>
@@ -155,9 +214,13 @@ const Customers: React.FC<CustomersProps> = ({ state }) => {
                     </span>
                   </div>
                   <div className="flex items-center gap-2 text-[10px] text-slate-400 font-medium">
-                    <span>{customer.orderCount} order{customer.orderCount > 1 ? 's' : ''}</span>
-                    <span>•</span>
-                    <span>{customer.channels.join(', ')}</span>
+                    <span>{customer.orderCount} order{customer.orderCount !== 1 ? 's' : ''}</span>
+                    {customer.channels.length > 0 && (
+                      <>
+                        <span>•</span>
+                        <span>{customer.channels.join(', ')}</span>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
@@ -169,6 +232,61 @@ const Customers: React.FC<CustomersProps> = ({ state }) => {
           ))
         )}
       </div>
+
+      {/* Add Customer Modal */}
+      {showAddModal && (
+        <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center sm:p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="bg-white w-full max-w-[400px] rounded-t-[32px] sm:rounded-[32px] p-6">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight flex items-center gap-2">
+                <i className="fa-solid fa-user-plus text-teal-500"></i> Add Customer
+              </h3>
+              <button onClick={() => setShowAddModal(false)} className="w-8 h-8 bg-slate-100 rounded-full flex items-center justify-center text-slate-500 hover:bg-slate-200 transition-colors">
+                <i className="fa-solid fa-xmark"></i>
+              </button>
+            </div>
+            <form onSubmit={handleAddCustomer} className="space-y-4">
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Name *</label>
+                <input
+                  type="text"
+                  required
+                  value={newName}
+                  onChange={e => setNewName(e.target.value)}
+                  placeholder="Customer name"
+                  className="w-full bg-slate-50 border-none rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-teal-500 placeholder:text-slate-300"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Phone</label>
+                <input
+                  type="tel"
+                  value={newPhone}
+                  onChange={e => setNewPhone(e.target.value)}
+                  placeholder="Optional"
+                  className="w-full bg-slate-50 border-none rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-teal-500 placeholder:text-slate-300"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Email</label>
+                <input
+                  type="email"
+                  value={newEmail}
+                  onChange={e => setNewEmail(e.target.value)}
+                  placeholder="Optional"
+                  className="w-full bg-slate-50 border-none rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-teal-500 placeholder:text-slate-300"
+                />
+              </div>
+              <button
+                type="submit"
+                className="w-full bg-teal-500 text-white py-4 rounded-xl font-black text-sm shadow-xl shadow-teal-200 mt-2 hover:bg-teal-600 transition-all active:scale-95"
+              >
+                Add Customer
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

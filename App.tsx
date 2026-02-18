@@ -165,7 +165,7 @@ const App: React.FC = () => {
       case 'dashboard': return <Dashboard state={state} onNav={setActiveTab} />;
       case 'orders': return <Orders state={state} onUpdateOrders={(orders) => setState(prev => ({ ...prev, orders }))} />;
       case 'inventory': return <Inventory state={state} onUpdateProducts={(p) => setState(prev => ({ ...prev, products: p }))} />;
-      case 'customers': return <Customers state={state} />;
+      case 'customers': return <Customers state={state} onAddCustomer={(c) => setState(prev => ({ ...prev, customers: [c, ...prev.customers] }))} />;
       case 'expenses': return <Expenses state={state} onAddExpense={addExpense} />;
       case 'settings': return <Settings profile={state.profile} settings={state.settings} onUpdateProfile={(p) => setState(prev => ({ ...prev, profile: p }))} onUpdateSettings={(s) => setState(prev => ({ ...prev, settings: s }))} onLogout={() => setState(prev => ({ ...prev, isLoggedIn: false }))} />;
       default: return <Dashboard state={state} onNav={setActiveTab} />;
