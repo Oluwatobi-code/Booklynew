@@ -432,7 +432,7 @@ const App: React.FC = () => {
 
       if (allItems.length > 0) {
         setManualSaleForm({
-          customerName: result?.customerName || 'Walk-in Customer',
+          customerName: '',
           customerPhone: '',
           items: allItems,
           note: `AI captured from text`,
