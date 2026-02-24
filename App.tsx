@@ -57,6 +57,7 @@ const App: React.FC = () => {
       stock?: number;
       lowAlert?: number;
       addToInventory?: boolean;
+      fromAI?: boolean;
     }[];
     note: string;
     source: string;
@@ -424,7 +425,10 @@ const App: React.FC = () => {
           lowAlert: 5
         }));
 
-      const allItems = [...matchedItems, ...newItems];
+      const allItems = [
+        ...matchedItems.map(i => ({ ...i, fromAI: true })),
+        ...newItems.map(i => ({ ...i, fromAI: true }))
+      ];
 
       if (allItems.length > 0) {
         setManualSaleForm({
@@ -659,8 +663,18 @@ const App: React.FC = () => {
                         <button type="button" onClick={() => removeSaleItem(item.id)} className="absolute top-2 right-2 text-slate-300 hover:text-red-500 transition-colors">
                           <i className="fa-solid fa-circle-xmark text-sm"></i>
                         </button>
-                        <div className="pr-6">
-                          <span className="text-xs font-bold text-slate-800">{item.name} <span className="ml-1 text-[7px] bg-teal-100 text-teal-700 px-1 py-0.5 rounded-full uppercase tracking-widest">New</span></span>
+                        <div className="pr-6 flex items-center gap-1">
+                          {item.fromAI ? (
+                            <input
+                              type="text"
+                              value={item.name}
+                              onChange={e => updateSaleItem(item.id, 'name', e.target.value)}
+                              className="text-xs font-bold text-slate-800 bg-transparent border-b border-teal-500/30 focus:border-teal-500 outline-none"
+                            />
+                          ) : (
+                            <span className="text-xs font-bold text-slate-800">{item.name}</span>
+                          )}
+                          <span className="text-[7px] bg-teal-100 text-teal-700 px-1 py-0.5 rounded-full uppercase tracking-widest">New</span>
                         </div>
 
                         <div className="space-y-2 animate-in slide-in-from-top-1">
@@ -710,7 +724,16 @@ const App: React.FC = () => {
                     ) : (
                       /* === EXISTING INVENTORY ITEM (compact horizontal row) === */
                       <div key={item.id} className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100/50">
-                        <span className="flex-1 text-sm font-bold text-slate-800 truncate">{item.name}</span>
+                        {item.fromAI ? (
+                          <input
+                            type="text"
+                            value={item.name}
+                            onChange={e => updateSaleItem(item.id, 'name', e.target.value)}
+                            className="flex-1 text-sm font-bold text-slate-800 bg-transparent border-b border-teal-500/30 focus:border-teal-500 outline-none mr-2"
+                          />
+                        ) : (
+                          <span className="flex-1 text-sm font-bold text-slate-800 truncate">{item.name}</span>
+                        )}
                         <div className="flex items-center gap-1.5 translate-y-1">
                           <label className="text-[10px] font-black text-slate-400 uppercase absolute -top-4 left-1">Qty</label>
                           <input
@@ -783,19 +806,6 @@ const App: React.FC = () => {
               </div>
 
               <div className="space-y-3">
-                {manualSaleForm.note?.includes('AI captured') && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setAiInputText(''); // Clear to allow fresh input
-                      setShowAICapture(true);
-                      setShowManualSale(false);
-                    }}
-                    className="w-full bg-slate-100 text-slate-600 py-3 rounded-xl font-bold text-sm border-2 border-slate-200 flex items-center justify-center gap-2 hover:bg-slate-200 transition-all"
-                  >
-                    <i className="fa-solid fa-wand-magic-sparkles text-purple-600"></i> Adjust with AI
-                  </button>
-                )}
 
                 <button
                   type="submit"
