@@ -3,12 +3,12 @@ import { db } from '../firebase';
 import { BusinessProfile, Order, Product, Customer, Expense } from '../types';
 
 const INITIAL_PROFILE: BusinessProfile = {
-    name: 'My Business',
+    name: '',
     currency: 'NGN',
     phone: '',
     email: '',
-    footerNote: 'Thank you for your patronage!',
-    vipThreshold: 5
+    footerNote: '',
+    vipThreshold: 0
 };
 
 /** Shape of the user document stored in Firestore */

@@ -13,12 +13,12 @@ import { onAuthChange, logOut } from './services/auth';
 import { getUserData, saveUserData } from './services/firestore';
 
 const INITIAL_PROFILE: BusinessProfile = {
-  name: 'My Business',
+  name: '',
   currency: 'NGN',
   phone: '',
   email: '',
-  footerNote: 'Thank you for your patronage!',
-  vipThreshold: 5
+  footerNote: '',
+  vipThreshold: 0
 };
 
 const DEFAULT_STATE: AppState = {
@@ -38,6 +38,7 @@ const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [showFabMenu, setShowFabMenu] = useState(false);
   const [authChecked, setAuthChecked] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<'synced' | 'syncing' | 'error'>('synced');
 
   // Modals
   const [showManualSale, setShowManualSale] = useState(false);
@@ -146,6 +147,18 @@ const App: React.FC = () => {
     return () => { window.removeEventListener('online', handleOnline); window.removeEventListener('offline', handleOffline); };
   }, []);
 
+  // --- Force Save on Tab Close ---
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (syncStatus === 'syncing') {
+        e.preventDefault();
+        e.returnValue = ''; // Browsers show a generic message
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [syncStatus]);
+
   // --- Debounced Firestore Save ---
   const debouncedSave = useCallback((currentState: AppState) => {
     // BLOCK saves if we are currently loading data or if the session is invalid
@@ -157,6 +170,7 @@ const App: React.FC = () => {
     saveTimerRef.current = setTimeout(async () => {
       if (!currentState.uid || !currentState.isLoggedIn) return;
 
+      setSyncStatus('syncing');
       try {
         await saveUserData(currentState.uid!, {
           profile: currentState.profile,
@@ -166,8 +180,10 @@ const App: React.FC = () => {
           expenses: currentState.expenses,
           settings: currentState.settings
         });
+        setSyncStatus('synced');
         console.log('✓ Data synced to cloud');
       } catch (err) {
+        setSyncStatus('error');
         console.error('Failed to auto-save to Firestore:', err);
       }
     }, 2000); // 2s debounce
@@ -224,6 +240,7 @@ const App: React.FC = () => {
 
     // Attempt ONE last forced save before logging out
     if (state.uid && state.isLoggedIn) {
+      setSyncStatus('syncing');
       try {
         console.log('Performing final save before logout...');
         await saveUserData(state.uid, {
@@ -234,12 +251,15 @@ const App: React.FC = () => {
           expenses: state.expenses,
           settings: state.settings
         });
+        setSyncStatus('synced');
       } catch (err) {
-        console.warn('Final save failed (maybe already logged out?):', err);
+        setSyncStatus('error');
+        console.warn('Final save failed:', err);
       }
     }
 
     await logOut();
+    setSyncStatus('synced');
     setState(DEFAULT_STATE);
     setActiveTab('dashboard');
   };
@@ -492,6 +512,14 @@ const App: React.FC = () => {
           </h1>
         </div>
         <div className="flex items-center gap-3">
+          {/* Sync Indicator */}
+          <div className="flex items-center gap-1.5 px-2 py-1 bg-slate-50 border border-slate-100 rounded-lg">
+            <div className={`w-1.5 h-1.5 rounded-full ${syncStatus === 'synced' ? 'bg-emerald-500' : syncStatus === 'syncing' ? 'bg-amber-500 animate-pulse' : 'bg-red-500'}`}></div>
+            <span className="text-[9px] font-bold text-slate-500 uppercase tracking-tight">
+              {syncStatus === 'synced' ? 'Saved' : syncStatus === 'syncing' ? 'Syncing...' : 'Error'}
+            </span>
+          </div>
+
           <button onClick={() => setActiveTab('settings')} className="text-slate-400 hover:text-teal-500 transition-colors">
             <i className="fa-solid fa-gear text-lg"></i>
           </button>
