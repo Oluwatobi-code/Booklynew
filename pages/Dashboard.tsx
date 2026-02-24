@@ -219,13 +219,8 @@ const Dashboard: React.FC<DashboardProps> = ({ state, onNav }) => {
           {recentOrders.length > 0 ? recentOrders.map(order => (
             <div key={order.id} className="bg-white p-4 rounded-2xl flex items-center justify-between border border-slate-100/50 shadow-sm">
               <div className="flex items-center gap-3">
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center border ${order.status === 'Paid' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
-                  order.status === 'Delivered' ? 'bg-blue-50 text-blue-600 border-blue-100' :
-                    'bg-amber-50 text-amber-600 border-amber-100'
-                  }`}>
-                  <i className={`fa-solid ${order.status === 'Paid' ? 'fa-check' :
-                    order.status === 'Delivered' ? 'fa-truck' : 'fa-clock'
-                    }`}></i>
+                <div className="w-10 h-10 rounded-full flex items-center justify-center border bg-slate-50 text-slate-500 border-slate-100">
+                  <i className="fa-solid fa-receipt"></i>
                 </div>
                 <div>
                   <p className="text-xs font-bold text-slate-900">{order.customerName}</p>

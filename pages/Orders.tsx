@@ -5,13 +5,14 @@ import { AppState } from '../types';
 interface OrdersProps {
     state: AppState;
     onUpdateOrders: (orders: AppState['orders']) => void;
+    onAddOrder: () => void;
 }
 
-const STATUS_OPTIONS = ['All', 'Pending', 'Paid', 'Delivered'] as const;
+const CHANNEL_OPTIONS = ['All', 'WhatsApp', 'Instagram', 'Facebook', 'Offline'] as const;
 
-const Orders: React.FC<OrdersProps> = ({ state, onUpdateOrders }) => {
+const Orders: React.FC<OrdersProps> = ({ state, onUpdateOrders, onAddOrder }) => {
     const [search, setSearch] = useState('');
-    const [statusFilter, setStatusFilter] = useState<string>('All');
+    const [channelFilter, setChannelFilter] = useState<string>('All');
 
     // Derive customer tiers from order history
     const getCustomerTier = (customerName: string): 'VIP' | 'Returning' | 'New' => {
@@ -35,13 +36,16 @@ const Orders: React.FC<OrdersProps> = ({ state, onUpdateOrders }) => {
         );
     };
 
-    const updateOrderStatus = (orderId: string, newStatus: 'Paid' | 'Pending' | 'Delivered') => {
-        onUpdateOrders(state.orders.map(o => o.id === orderId ? { ...o, status: newStatus } : o));
-    };
 
     const filteredOrders = [...state.orders]
         .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-        .filter(o => statusFilter === 'All' || o.status === statusFilter)
+        .filter(o => {
+            if (channelFilter === 'All') return true;
+            if (channelFilter === 'Offline') {
+                return !['WhatsApp', 'Instagram', 'Facebook'].includes(o.source);
+            }
+            return o.source === channelFilter;
+        })
         .filter(o => {
             if (!search) return true;
             const q = search.toLowerCase();
@@ -50,18 +54,27 @@ const Orders: React.FC<OrdersProps> = ({ state, onUpdateOrders }) => {
                 o.source.toLowerCase().includes(q);
         });
 
-    const statusCounts = {
+    const channelCounts = {
         All: state.orders.length,
-        Pending: state.orders.filter(o => o.status === 'Pending').length,
-        Paid: state.orders.filter(o => o.status === 'Paid').length,
-        Delivered: state.orders.filter(o => o.status === 'Delivered').length
+        WhatsApp: state.orders.filter(o => o.source === 'WhatsApp').length,
+        Instagram: state.orders.filter(o => o.source === 'Instagram').length,
+        Facebook: state.orders.filter(o => o.source === 'Facebook').length,
+        Offline: state.orders.filter(o => !['WhatsApp', 'Instagram', 'Facebook'].includes(o.source)).length
     };
 
     return (
         <div className="space-y-5">
-            <div className="space-y-1">
-                <h2 className="text-2xl font-black text-slate-900 tracking-tight">Orders</h2>
-                <p className="text-slate-500 text-xs font-medium">All recorded sales</p>
+            <div className="flex justify-between items-center">
+                <div className="space-y-1">
+                    <h2 className="text-2xl font-black text-slate-900 tracking-tight">Orders</h2>
+                    <p className="text-slate-500 text-xs font-medium">All recorded sales</p>
+                </div>
+                <button
+                    onClick={onAddOrder}
+                    className="bg-teal-500 text-white px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 shadow-lg shadow-teal-200 hover:bg-teal-600 transition-all active:scale-95"
+                >
+                    <i className="fa-solid fa-plus font-black"></i> Add Order
+                </button>
             </div>
 
             {/* Search */}
@@ -78,21 +91,21 @@ const Orders: React.FC<OrdersProps> = ({ state, onUpdateOrders }) => {
                 />
             </div>
 
-            {/* Status Filter Tabs */}
+            {/* Channel Filter Tabs */}
             <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
-                {STATUS_OPTIONS.map(status => (
+                {CHANNEL_OPTIONS.map(channel => (
                     <button
-                        key={status}
-                        onClick={() => setStatusFilter(status)}
-                        className={`flex-shrink-0 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${statusFilter === status
-                                ? 'bg-teal-500 text-white shadow-md shadow-teal-200'
-                                : 'bg-white text-slate-500 border border-slate-100'
+                        key={channel}
+                        onClick={() => setChannelFilter(channel)}
+                        className={`flex-shrink-0 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${channelFilter === channel
+                            ? 'bg-teal-500 text-white shadow-md shadow-teal-200'
+                            : 'bg-white text-slate-500 border border-slate-100'
                             }`}
                     >
-                        {status}
-                        <span className={`ml-1.5 px-1.5 py-0.5 rounded-md text-[8px] ${statusFilter === status ? 'bg-white/20' : 'bg-slate-100'
+                        {channel}
+                        <span className={`ml-1.5 px-1.5 py-0.5 rounded-md text-[8px] ${channelFilter === channel ? 'bg-white/20' : 'bg-slate-100'
                             }`}>
-                            {statusCounts[status]}
+                            {channelCounts[channel as keyof typeof channelCounts]}
                         </span>
                     </button>
                 ))}
@@ -107,10 +120,10 @@ const Orders: React.FC<OrdersProps> = ({ state, onUpdateOrders }) => {
                         </div>
                         <div>
                             <p className="text-sm font-bold text-slate-400">
-                                {search || statusFilter !== 'All' ? 'No matching orders' : 'No orders yet'}
+                                {search || channelFilter !== 'All' ? 'No matching orders' : 'No orders yet'}
                             </p>
                             <p className="text-xs text-slate-300 mt-1">
-                                {search || statusFilter !== 'All' ? 'Try adjusting your filters' : 'Sales you record will appear here.'}
+                                {search || channelFilter !== 'All' ? 'Try adjusting your filters' : 'Sales you record will appear here.'}
                             </p>
                         </div>
                     </div>
@@ -122,13 +135,8 @@ const Orders: React.FC<OrdersProps> = ({ state, onUpdateOrders }) => {
                                 {/* Order Header */}
                                 <div className="flex justify-between items-start">
                                     <div className="flex items-center gap-3">
-                                        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm ${order.status === 'Paid' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' :
-                                                order.status === 'Delivered' ? 'bg-blue-50 text-blue-600 border border-blue-100' :
-                                                    'bg-amber-50 text-amber-600 border border-amber-100'
-                                            }`}>
-                                            <i className={`fa-solid ${order.status === 'Paid' ? 'fa-check' :
-                                                    order.status === 'Delivered' ? 'fa-truck' : 'fa-clock'
-                                                }`}></i>
+                                        <div className="w-10 h-10 rounded-full flex items-center justify-center text-sm bg-slate-100 text-slate-500 border border-slate-200">
+                                            <i className="fa-solid fa-receipt"></i>
                                         </div>
                                         <div>
                                             <div className="flex items-center gap-2">
@@ -155,30 +163,14 @@ const Orders: React.FC<OrdersProps> = ({ state, onUpdateOrders }) => {
                                     </div>
                                 )}
 
-                                {/* Status Toggle */}
-                                <div className="flex items-center justify-between pt-1 border-t border-slate-50">
-                                    <div className="flex gap-1.5">
-                                        {(['Pending', 'Paid', 'Delivered'] as const).map(s => (
-                                            <button
-                                                key={s}
-                                                onClick={() => updateOrderStatus(order.id, s)}
-                                                className={`text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-lg transition-all ${order.status === s
-                                                        ? s === 'Paid' ? 'bg-emerald-500 text-white' :
-                                                            s === 'Delivered' ? 'bg-blue-500 text-white' :
-                                                                'bg-amber-500 text-white'
-                                                        : 'bg-slate-100 text-slate-400 hover:bg-slate-200'
-                                                    }`}
-                                            >
-                                                {s}
-                                            </button>
-                                        ))}
-                                    </div>
-                                    {order.note && (
-                                        <span className="text-[10px] text-slate-400 italic truncate max-w-[120px]">
+                                {/* Footer Note */}
+                                {order.note && (
+                                    <div className="pt-1 border-t border-slate-50">
+                                        <span className="text-[10px] text-slate-400 italic truncate block">
                                             <i className="fa-solid fa-note-sticky mr-1"></i>{order.note}
                                         </span>
-                                    )}
-                                </div>
+                                    </div>
+                                )}
                             </div>
                         );
                     })

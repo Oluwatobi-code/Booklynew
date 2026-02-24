@@ -7,6 +7,9 @@ export interface OrderItem {
   quantity: number;
   price: number;
   variant?: string;
+  costPrice?: number; // For new items to be added to inventory
+  lowStockThreshold?: number; // For new items to be added to inventory
+  addToInventory?: boolean; // Flag to add to inventory
 }
 
 export interface Customer {
@@ -24,6 +27,7 @@ export interface Order {
   id: string;
   customerId?: string; // Optional now for quick sales
   customerName: string;
+  customerPhone?: string;
   items: OrderItem[];
   total: number;
   date: string;
@@ -31,6 +35,7 @@ export interface Order {
   source: SalesSource;
   paymentMethod: 'Cash' | 'Wallet' | 'Transfer';
   note?: string;
+  receiptUrl?: string; // URL or local path to receipt image
 }
 
 export interface Product {
@@ -61,6 +66,7 @@ export interface Expense {
 
 export interface AppState {
   isLoggedIn: boolean;
+  uid: string | null;
   profile: BusinessProfile;
   orders: Order[];
   products: Product[];

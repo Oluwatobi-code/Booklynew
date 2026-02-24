@@ -143,12 +143,12 @@ const SalesHub: React.FC<SalesHubProps> = ({ state, onUpdateOrder, onNav }) => {
           {filteredOrders.length > 0 ? filteredOrders.map(order => (
             <div key={order.id} className="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm flex justify-between items-center group active:scale-[0.98] transition-all">
               <div className="flex gap-4 items-center">
-                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-xl ${order.status === 'Paid' ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'}`}>
+                <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-xl bg-slate-100 text-slate-500">
                   <i className={`fa-brands fa-${order.source.toLowerCase().replace(' ', '-')}`}></i>
                 </div>
                 <div>
                   <p className="font-bold text-slate-900">{order.customerName}</p>
-                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{new Date(order.date).toLocaleDateString()} • {order.status}</p>
+                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{new Date(order.date).toLocaleDateString()} • {order.source}</p>
                 </div>
               </div>
               <div className="text-right">

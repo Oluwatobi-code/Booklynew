@@ -14,6 +14,7 @@ const Customers: React.FC<CustomersProps> = ({ state, onAddCustomer }) => {
   const [newName, setNewName] = useState('');
   const [newPhone, setNewPhone] = useState('');
   const [newEmail, setNewEmail] = useState('');
+  const [selectedCustomer, setSelectedCustomer] = useState<any | null>(null);
 
   // Build customer list from orders
   const customersFromOrders = () => {
@@ -198,7 +199,11 @@ const Customers: React.FC<CustomersProps> = ({ state, onAddCustomer }) => {
           </div>
         ) : (
           customers.map((customer, idx) => (
-            <div key={idx} className="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm flex justify-between items-center">
+            <div
+              key={idx}
+              onClick={() => setSelectedCustomer(customer)}
+              className="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm flex justify-between items-center cursor-pointer hover:border-teal-500 transition-all active:scale-[0.98]"
+            >
               <div className="flex items-center gap-3">
                 <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-lg font-black shadow-inner ${customer.tier === 'VIP' ? 'bg-amber-50 text-amber-600' :
                   customer.tier === 'Returning' ? 'bg-teal-50 text-teal-600' :
@@ -209,7 +214,7 @@ const Customers: React.FC<CustomersProps> = ({ state, onAddCustomer }) => {
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
                     <h3 className="font-bold text-slate-900 text-sm">{customer.name}</h3>
-                    <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-full uppercase tracking-widest ${tierStyles[customer.tier]}`}>
+                    <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-full uppercase tracking-widest ${tierStyles[customer.tier as keyof typeof tierStyles]}`}>
                       {customer.tier}
                     </span>
                   </div>
@@ -232,6 +237,98 @@ const Customers: React.FC<CustomersProps> = ({ state, onAddCustomer }) => {
           ))
         )}
       </div>
+
+      {/* Customer Details Modal */}
+      {selectedCustomer && (
+        <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center sm:p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="bg-white w-full max-w-[400px] rounded-t-[32px] sm:rounded-[32px] p-6 max-h-[85vh] overflow-hidden flex flex-col">
+            <div className="flex justify-between items-center mb-6">
+              <div className="flex items-center gap-3">
+                <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-lg font-black shadow-inner ${selectedCustomer.tier === 'VIP' ? 'bg-amber-50 text-amber-600' :
+                  selectedCustomer.tier === 'Returning' ? 'bg-teal-50 text-teal-600' :
+                    'bg-slate-100 text-slate-500'
+                  }`}>
+                  {selectedCustomer.name.charAt(0).toUpperCase()}
+                </div>
+                <div>
+                  <h3 className="text-lg font-black text-slate-900">{selectedCustomer.name}</h3>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-full uppercase tracking-widest ${tierStyles[selectedCustomer.tier as keyof typeof tierStyles]}`}>
+                      {selectedCustomer.tier}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <button onClick={() => setSelectedCustomer(null)} className="w-8 h-8 bg-slate-100 rounded-full flex items-center justify-center text-slate-500 hover:bg-slate-200 transition-colors">
+                <i className="fa-solid fa-xmark"></i>
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto pr-1 space-y-6 pb-4 no-scrollbar">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-slate-50 rounded-2xl p-4">
+                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Total Spent</p>
+                  <p className="text-lg font-black text-slate-900">{state.profile.currency}{selectedCustomer.totalSpent.toLocaleString()}</p>
+                </div>
+                <div className="bg-slate-50 rounded-2xl p-4">
+                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Orders</p>
+                  <p className="text-lg font-black text-slate-900">{selectedCustomer.orderCount}</p>
+                </div>
+              </div>
+
+              {(selectedCustomer.phone || selectedCustomer.email) && (
+                <div className="space-y-2">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Contact Info</p>
+                  <div className="bg-slate-50 rounded-2xl p-4 space-y-3">
+                    {selectedCustomer.phone && (
+                      <div className="flex items-center gap-3">
+                        <i className="fa-solid fa-phone text-teal-500 text-xs"></i>
+                        <span className="text-sm font-bold text-slate-700">{selectedCustomer.phone}</span>
+                      </div>
+                    )}
+                    {selectedCustomer.email && (
+                      <div className="flex items-center gap-3">
+                        <i className="fa-solid fa-envelope text-teal-500 text-xs"></i>
+                        <span className="text-sm font-bold text-slate-700">{selectedCustomer.email}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              <div className="space-y-3">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Order History</p>
+                <div className="space-y-3">
+                  {state.orders
+                    .filter(o => o.customerName.toLowerCase().trim() === selectedCustomer.name.toLowerCase().trim())
+                    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                    .map(order => (
+                      <div key={order.id} className="border border-slate-100 rounded-2xl p-4 space-y-3">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <p className="text-sm font-bold text-slate-900">
+                              {new Date(order.date).toLocaleDateString('en-NG', { day: 'numeric', month: 'short', year: 'numeric' })}
+                            </p>
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{order.source}</span>
+                          </div>
+                          <p className="text-sm font-black text-teal-600">{state.profile.currency}{order.total.toLocaleString()}</p>
+                        </div>
+                        <div className="bg-slate-50 rounded-xl p-2.5 space-y-1">
+                          {order.items.map((item, idx) => (
+                            <div key={idx} className="flex justify-between text-[10px]">
+                              <span className="text-slate-600">{item.quantity}x {item.name}</span>
+                              <span className="text-slate-800 font-bold">{state.profile.currency}{(item.price * item.quantity).toLocaleString()}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Add Customer Modal */}
       {showAddModal && (
