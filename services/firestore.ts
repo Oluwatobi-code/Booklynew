@@ -26,6 +26,22 @@ export interface UserDocument {
     };
 }
 
+/** 
+ * Recursively removes undefined values from an object to prevent Firestore errors.
+ */
+const sanitizeData = (obj: any): any => {
+    if (Array.isArray(obj)) {
+        return obj.map(sanitizeData);
+    } else if (obj !== null && typeof obj === 'object') {
+        return Object.fromEntries(
+            Object.entries(obj)
+                .filter(([_, value]) => value !== undefined)
+                .map(([key, value]) => [key, sanitizeData(value)])
+        );
+    }
+    return obj;
+};
+
 /**
  * Create a new user document in Firestore with default values.
  * Called once during sign-up.
@@ -42,7 +58,7 @@ export const createUserDocument = async (uid: string, email: string): Promise<vo
         expenses: [],
         settings: { showFab: true, soundEnabled: false }
     };
-    await setDoc(userRef, defaultData);
+    await setDoc(userRef, sanitizeData(defaultData));
 };
 
 /**
@@ -67,5 +83,6 @@ export const saveUserData = async (
     data: Partial<UserDocument>
 ): Promise<void> => {
     const userRef = doc(db, 'users', uid);
-    await setDoc(userRef, data, { merge: true });
+    const cleanData = sanitizeData(data);
+    await setDoc(userRef, cleanData, { merge: true });
 };
