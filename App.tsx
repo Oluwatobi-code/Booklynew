@@ -11,6 +11,7 @@ import Settings from './pages/Settings';
 import { extractOrderFromText } from './geminiService';
 import { onAuthChange, logOut } from './services/auth';
 import { getUserData, saveUserData } from './services/firestore';
+import { auth } from './firebase';
 
 const INITIAL_PROFILE: BusinessProfile = {
   name: '',
@@ -68,7 +69,7 @@ const App: React.FC = () => {
     customerPhone: '',
     items: [],
     note: '',
-    source: 'Walk-in',
+    source: 'Select',
     receiptImage: null
   });
 
@@ -85,6 +86,18 @@ const App: React.FC = () => {
   // Debounce timer for Firestore saves
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isLoadingData = useRef(false);
+  const suggestionsRef = useRef<HTMLDivElement>(null);
+
+  // --- Click outside suggestion list to close ---
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (suggestionsRef.current && !suggestionsRef.current.contains(event.target as Node)) {
+        setShowProductSuggestions(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   // --- Firebase Auth State Listener ---
   useEffect(() => {
@@ -201,11 +214,16 @@ const App: React.FC = () => {
     isLoadingData.current = true;
     try {
       const data = await getUserData(uid);
+      const userEmail = auth.currentUser?.email || '';
+
       if (data) {
         setState({
           isLoggedIn: true,
           uid,
-          profile: data.profile || INITIAL_PROFILE,
+          profile: {
+            ...data.profile,
+            email: data.profile?.email || userEmail // Auto-fill if blank
+          },
           orders: data.orders || [],
           products: data.products || [],
           customers: data.customers || [],
@@ -218,13 +236,14 @@ const App: React.FC = () => {
           ...DEFAULT_STATE,
           isLoggedIn: true,
           uid,
+          profile: { ...INITIAL_PROFILE, email: userEmail },
           isOnline: navigator.onLine
         });
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('CRITICAL: Failed to load user data on login. Error:', err);
-      // Do NOT reset state to DEFAULT_STATE on error, just alert
-      alert('Network error: Could not sync your data. Please check your connection.');
+      // Show actual error message to help diagnose
+      alert(`Network error: ${err.message || 'Could not sync your data'}. Please check your connection.`);
     } finally {
       isLoadingData.current = false;
     }
@@ -275,91 +294,125 @@ const App: React.FC = () => {
     e.preventDefault();
     const totalAmount = manualSaleForm.items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
 
-    if (totalAmount > 0 && manualSaleForm.items.length > 0) {
-      // Validate stock for ALL items
-      for (const item of manualSaleForm.items) {
-        if (item.isNew && item.addToInventory) {
-          if (!item.stock || item.stock <= 0) {
-            alert(`Please set stock quantity for "${item.name}" before recording the sale.`);
-            return;
-          }
-          if (item.quantity > item.stock) {
-            alert(`Quantity for "${item.name}" (${item.quantity}) cannot exceed stock (${item.stock}).`);
-            return;
-          }
-        } else if (!item.isNew) {
-          // Validate against existing inventory stock
-          const inventoryProduct = state.products.find(p => p.name === item.name);
-          if (inventoryProduct && item.quantity > inventoryProduct.stock) {
-            alert(`Quantity for "${item.name}" (${item.quantity}) exceeds available stock (${inventoryProduct.stock}).`);
-            return;
-          }
-        }
+    if (manualSaleForm.items.length === 0) {
+      alert("Please add at least one item to the sale.");
+      return;
+    }
+
+    if (manualSaleForm.source === 'Select') {
+      alert("Please select a sales source (e.g. WhatsApp, Walk-in) before saving.");
+      return;
+    }
+
+    if (!manualSaleForm.customerName.trim()) {
+      alert("Please enter a customer name.");
+      return;
+    }
+
+    // Validate quantity and price for all items
+    for (const item of manualSaleForm.items) {
+      if (!item.quantity || item.quantity < 1) {
+        alert(`Quantity for "${item.name}" must be at least 1.`);
+        return;
       }
 
-      // Handle adding new products to inventory (stock minus qty sold)
-      const newProducts: Product[] = [];
-      manualSaleForm.items.forEach(item => {
-        if (item.isNew && item.addToInventory) {
-          newProducts.push({
-            id: Date.now().toString() + Math.random().toString(36).substr(2, 5),
-            name: item.name,
-            costPrice: item.costPrice || 0,
-            sellingPrice: item.price || 0,
-            stock: (item.stock || 0) - item.quantity,
-            lowStockThreshold: item.lowAlert || 5
-          });
+      if (item.price <= 0) {
+        alert(`Selling price for "${item.name}" must be greater than 0.`);
+        return;
+      }
+
+      // Strict validation for items being added to inventory
+      if (item.isNew && item.addToInventory) {
+        if (!item.costPrice || item.costPrice <= 0) {
+          alert(`Please enter a valid Cost Price for new product "${item.name}".`);
+          return;
         }
-      });
-
-      // Deduct stock for existing products
-      const updatedProducts = state.products.map(p => {
-        const soldItem = manualSaleForm.items.find(i => !i.isNew && i.name === p.name);
-        if (soldItem) {
-          return { ...p, stock: Math.max(0, p.stock - soldItem.quantity) };
+        if (!item.stock || item.stock <= 0) {
+          alert(`Please enter a valid Stock Quantity for new product "${item.name}".`);
+          return;
         }
-        return p;
-      });
-
-      const newOrder: Order = {
-        id: Date.now().toString(),
-        customerName: manualSaleForm.customerName,
-        customerPhone: manualSaleForm.customerPhone,
-        items: manualSaleForm.items.map(i => ({
-          id: i.id || Date.now().toString(),
-          name: i.name,
-          quantity: i.quantity,
-          price: i.price,
-          variant: 'Standard'
-        })),
-        total: totalAmount,
-        date: new Date().toISOString(),
-        status: 'Paid',
-        source: manualSaleForm.source as any,
-        paymentMethod: 'Cash',
-        note: manualSaleForm.note,
-        receiptUrl: manualSaleForm.receiptImage || undefined
-      };
-
-      setState(prev => ({
-        ...prev,
-        orders: [newOrder, ...prev.orders],
-        products: [...updatedProducts, ...newProducts]
-      }));
-
-      setShowManualSale(false);
-      setProductSearch('');
-      setShowProductSuggestions(false);
-      setManualSaleForm({
-        customerName: '',
-        customerPhone: '',
-        items: [],
-        note: '',
-        source: 'Walk-in',
-        receiptImage: null
-      });
-      setReceiptOrder(newOrder);
+      }
     }
+
+    // Validate stock for ALL items
+    for (const item of manualSaleForm.items) {
+      if (item.isNew && item.addToInventory) {
+        if (item.quantity > item.stock!) {
+          alert(`Quantity for "${item.name}" (${item.quantity}) cannot exceed initial stock (${item.stock}).`);
+          return;
+        }
+      } else if (!item.isNew) {
+        // Validate against existing inventory stock
+        const inventoryProduct = state.products.find(p => p.name === item.name);
+        if (inventoryProduct && item.quantity > inventoryProduct.stock) {
+          alert(`Quantity for "${item.name}" (${item.quantity}) exceeds available stock (${inventoryProduct.stock}).`);
+          return;
+        }
+      }
+    }
+
+    // Handle adding new products to inventory (stock minus qty sold)
+    const newProducts: Product[] = [];
+    manualSaleForm.items.forEach(item => {
+      if (item.isNew && item.addToInventory) {
+        newProducts.push({
+          id: Date.now().toString() + Math.random().toString(36).substr(2, 5),
+          name: item.name,
+          costPrice: item.costPrice || 0,
+          sellingPrice: item.price || 0,
+          stock: (item.stock || 0) - item.quantity,
+          lowStockThreshold: item.lowAlert || 5
+        });
+      }
+    });
+
+    // Deduct stock for existing products
+    const updatedProducts = state.products.map(p => {
+      const soldItem = manualSaleForm.items.find(i => !i.isNew && i.name === p.name);
+      if (soldItem) {
+        return { ...p, stock: Math.max(0, p.stock - soldItem.quantity) };
+      }
+      return p;
+    });
+
+    const newOrder: Order = {
+      id: Date.now().toString(),
+      customerName: manualSaleForm.customerName,
+      customerPhone: manualSaleForm.customerPhone,
+      items: manualSaleForm.items.map(i => ({
+        id: i.id || Date.now().toString(),
+        name: i.name,
+        quantity: i.quantity,
+        price: i.price,
+        variant: 'Standard'
+      })),
+      total: totalAmount,
+      date: new Date().toISOString(),
+      status: 'Paid',
+      source: manualSaleForm.source as any,
+      paymentMethod: 'Cash',
+      note: manualSaleForm.note,
+      receiptUrl: manualSaleForm.receiptImage || undefined
+    };
+
+    setState(prev => ({
+      ...prev,
+      orders: [newOrder, ...prev.orders],
+      products: [...updatedProducts, ...newProducts]
+    }));
+
+    setShowManualSale(false);
+    setProductSearch('');
+    setShowProductSuggestions(false);
+    setManualSaleForm({
+      customerName: '',
+      customerPhone: '',
+      items: [],
+      note: '',
+      source: 'Select',
+      receiptImage: null
+    });
+    setReceiptOrder(newOrder);
   };
 
   const addItemToSale = () => {
@@ -395,29 +448,38 @@ const App: React.FC = () => {
     setter(cleaned === '' ? 0 : parseInt(cleaned));
   };
 
-  const extractUnmatchedProducts = (text: string): string[] => {
-    // Extract potential product names from text that weren't matched to inventory
+  const extractUnmatchedProducts = (text: string): { name: string, quantity: number }[] => {
+    // Extract potential product names and quantities from text that weren't matched to inventory
     const lower = text.toLowerCase();
     // Remove common non-product words
     const stopWords = ['i', 'want', 'to', 'buy', 'get', 'send', 'me', 'need', 'order', 'please', 'and', 'the', 'a', 'an', 'of', 'for', 'from', 'with', 'my', 'some', 'delivery', 'deliver', 'lekki', 'lagos', 'pairs', 'pair', 'pieces', 'piece', 'pcs', 'units', 'unit'];
     // Split by common delimiters
     const segments = lower.split(/(?:,|\band\b|\n|\.|;)+/).map(s => s.trim()).filter(Boolean);
-    const names: string[] = [];
+    const results: { name: string, quantity: number }[] = [];
     for (const segment of segments) {
-      // Extract product name by removing quantities and stop words
-      let cleaned = segment.replace(/\d+\s*[x×]?\s*/gi, '').trim();
-      cleaned = cleaned.split(/\s+/).filter(w => !stopWords.includes(w)).join(' ').trim();
+      // Extract quantity if present (e.g., "3 bags")
+      const qtyMatch = segment.match(/(\d+)\s*[x×]?\s*(.*)/i);
+      let qty = 1;
+      let rawName = segment;
+
+      if (qtyMatch) {
+        qty = parseInt(qtyMatch[1]) || 1;
+        rawName = qtyMatch[2];
+      }
+
+      // Extract product name by removing stop words
+      let cleaned = rawName.split(/\s+/).filter(w => !stopWords.includes(w)).join(' ').trim();
       if (cleaned.length >= 2) {
         // Capitalize first letter of each word
         const name = cleaned.replace(/\b\w/g, c => c.toUpperCase());
         // Check it's not already in inventory
         const isInInventory = state.products.some(p => p.name.toLowerCase().includes(cleaned.toLowerCase()) || cleaned.toLowerCase().includes(p.name.toLowerCase()));
-        if (!isInInventory && !names.includes(name)) {
-          names.push(name);
+        if (!isInInventory && !results.some(r => r.name === name)) {
+          results.push({ name, quantity: qty });
         }
       }
     }
-    return names;
+    return results;
   };
 
   const handleAICapture = async () => {
@@ -428,15 +490,15 @@ const App: React.FC = () => {
       const matchedItems = result?.items || [];
 
       // Also find unmatched product names and create them as new items
-      const unmatchedNames = extractUnmatchedProducts(aiInputText);
+      const unmatchedResults = extractUnmatchedProducts(aiInputText);
       // Filter out names that were already matched
       const matchedNamesLower = matchedItems.map(i => i.name.toLowerCase());
-      const newItems = unmatchedNames
-        .filter(name => !matchedNamesLower.some(mn => mn.includes(name.toLowerCase()) || name.toLowerCase().includes(mn)))
-        .map(name => ({
+      const newItems = unmatchedResults
+        .filter(r => !matchedNamesLower.some(mn => mn.includes(r.name.toLowerCase()) || r.name.toLowerCase().includes(mn)))
+        .map(r => ({
           id: Date.now().toString() + Math.random().toString(36).substr(2, 5),
-          name,
-          quantity: 1,
+          name: r.name,
+          quantity: r.quantity,
           price: 0,
           isNew: true,
           addToInventory: true,
@@ -512,12 +574,8 @@ const App: React.FC = () => {
           </h1>
         </div>
         <div className="flex items-center gap-3">
-          {/* Sync Indicator */}
-          <div className="flex items-center gap-1.5 px-2 py-1 bg-slate-50 border border-slate-100 rounded-lg">
-            <div className={`w-1.5 h-1.5 rounded-full ${syncStatus === 'synced' ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse'}`}></div>
-            <span className="text-[9px] font-bold text-slate-500 uppercase tracking-tight">
-              {syncStatus === 'synced' ? 'Saved' : 'Syncing...'}
-            </span>
+          <div className="flex items-center gap-1.5 px-2 py-1">
+            {/* Sync Logic remains active in background, badge hidden as requested */}
           </div>
 
           <button onClick={() => setActiveTab('settings')} className="text-slate-400 hover:text-teal-500 transition-colors">
@@ -601,7 +659,7 @@ const App: React.FC = () => {
               <div className="space-y-2">
                 <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest pl-1">Add Items</label>
 
-                <div className="relative">
+                <div className="relative" ref={suggestionsRef}>
                   <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs">
                     <i className="fa-solid fa-magnifying-glass"></i>
                   </div>
@@ -691,18 +749,18 @@ const App: React.FC = () => {
                         <button type="button" onClick={() => removeSaleItem(item.id)} className="absolute top-2 right-2 text-slate-300 hover:text-red-500 transition-colors">
                           <i className="fa-solid fa-circle-xmark text-sm"></i>
                         </button>
-                        <div className="pr-6 flex items-center gap-1">
+                        <div className="pr-6 flex items-center gap-2 min-w-0 w-full overflow-hidden">
                           {item.fromAI ? (
                             <input
                               type="text"
                               value={item.name}
                               onChange={e => updateSaleItem(item.id, 'name', e.target.value)}
-                              className="text-xs font-bold text-slate-800 bg-transparent border-b border-teal-500/30 focus:border-teal-500 outline-none"
+                              className="text-xs font-bold text-slate-800 bg-transparent border-b border-teal-500/30 focus:border-teal-500 outline-none flex-1 min-w-0"
                             />
                           ) : (
-                            <span className="text-xs font-bold text-slate-800">{item.name}</span>
+                            <span className="text-xs font-bold text-slate-800 truncate flex-1 min-w-0">{item.name}</span>
                           )}
-                          <span className="text-[7px] bg-teal-100 text-teal-700 px-1 py-0.5 rounded-full uppercase tracking-widest">New</span>
+                          <span className="flex-shrink-0 text-[7px] bg-teal-100 text-teal-700 px-1 py-0.5 rounded-full uppercase tracking-widest">New</span>
                         </div>
 
                         <div className="space-y-2 animate-in slide-in-from-top-1">
@@ -732,7 +790,10 @@ const App: React.FC = () => {
                         <div className="flex gap-2">
                           <div className="flex-1 space-y-1">
                             <label className="text-[11px] font-black text-slate-400 uppercase pl-1">Qty to Sell</label>
-                            <input type="text" inputMode="numeric" required placeholder="1" value={item.quantity || ''} onChange={e => handleIntInput(e.target.value, v => updateSaleItem(item.id, 'quantity', Math.max(1, v)), true)} className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-3 text-sm font-normal outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
+                            <input type="text" inputMode="numeric" required placeholder="1" value={item.quantity === 0 ? '' : item.quantity} onChange={e => handleIntInput(e.target.value, v => updateSaleItem(item.id, 'quantity', v), true)} className={`w-full bg-white border ${item.quantity < 1 ? 'border-red-500 bg-red-50' : 'border-slate-200'} rounded-lg px-2.5 py-3 text-sm font-normal outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none`} />
+                            {item.quantity < 1 && (
+                              <p className="text-[10px] text-red-500 font-bold pl-1 animate-pulse">Minimum 1 required</p>
+                            )}
                             {stockExceeded && (
                               <p className="text-[11px] text-red-500 font-bold pl-1">Exceeds stock ({availableStock})</p>
                             )}
@@ -743,7 +804,7 @@ const App: React.FC = () => {
                               <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[11px] text-slate-400 font-bold">{state.profile.currency}</span>
                               <input type="text" inputMode="numeric" required placeholder="0" value={item.price || ''} onChange={e => handleNumericInput(e.target.value, v => updateSaleItem(item.id, 'price', v), true)} className="w-full bg-white border border-slate-200 rounded-lg pl-7 pr-2 py-3 text-sm font-normal outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
                             </div>
-                            {item.addToInventory && item.costPrice && item.price > 0 && item.price < item.costPrice && (
+                            {item.addToInventory && !!item.costPrice && item.price > 0 && item.price < item.costPrice && (
                               <p className="text-[11px] text-amber-500 font-bold pl-1"><i className="fa-solid fa-triangle-exclamation mr-0.5"></i> Below cost</p>
                             )}
                           </div>
@@ -757,10 +818,10 @@ const App: React.FC = () => {
                             type="text"
                             value={item.name}
                             onChange={e => updateSaleItem(item.id, 'name', e.target.value)}
-                            className="flex-1 text-sm font-bold text-slate-800 bg-transparent border-b border-teal-500/30 focus:border-teal-500 outline-none mr-2"
+                            className="flex-1 min-w-0 text-sm font-bold text-slate-800 bg-transparent border-b border-teal-500/30 focus:border-teal-500 outline-none mr-2"
                           />
                         ) : (
-                          <span className="flex-1 text-sm font-bold text-slate-800 truncate">{item.name}</span>
+                          <span className="flex-1 min-w-0 text-sm font-bold text-slate-800 truncate mr-2">{item.name}</span>
                         )}
                         <div className="flex items-center gap-1.5 translate-y-1">
                           <label className="text-[10px] font-black text-slate-400 uppercase absolute -top-4 left-1">Qty</label>
@@ -768,9 +829,9 @@ const App: React.FC = () => {
                             type="text"
                             inputMode="numeric"
                             required
-                            value={item.quantity || ''}
-                            onChange={e => handleIntInput(e.target.value, v => updateSaleItem(item.id, 'quantity', Math.max(1, v)), true)}
-                            className="w-14 bg-white border border-slate-200 rounded-lg px-2 py-2 text-sm text-center font-normal outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                            value={item.quantity === 0 ? '' : item.quantity}
+                            onChange={e => handleIntInput(e.target.value, v => updateSaleItem(item.id, 'quantity', v), true)}
+                            className={`w-14 bg-white border ${item.quantity < 1 ? 'border-red-500' : 'border-slate-200'} rounded-lg px-2 py-2 text-sm text-center font-normal outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none`}
                           />
                         </div>
                         <div className="text-right">
@@ -791,6 +852,20 @@ const App: React.FC = () => {
                       Add products from the search above to start.
                     </div>
                   )}
+                  {manualSaleForm.items.some(i => i.fromAI) && (
+                    <div className="flex justify-center pt-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowManualSale(false);
+                          setShowAICapture(true);
+                        }}
+                        className="flex items-center gap-2 text-[11px] font-bold text-slate-400 hover:text-teal-600 transition-colors uppercase tracking-widest"
+                      >
+                        <i className="fa-solid fa-rotate-right"></i> Reprocess AI
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -804,7 +879,8 @@ const App: React.FC = () => {
               <div className="flex gap-2 items-start bg-slate-50 p-3 rounded-xl border border-slate-100">
                 <div className="flex-1 space-y-1">
                   <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest pl-1">Source</label>
-                  <select value={manualSaleForm.source} onChange={e => setManualSaleForm({ ...manualSaleForm, source: e.target.value })} className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm font-normal text-slate-700 outline-none hover:border-teal-500 transition-all">
+                  <select value={manualSaleForm.source} onChange={e => setManualSaleForm({ ...manualSaleForm, source: e.target.value })} className={`w-full bg-white border ${manualSaleForm.source === 'Select' ? 'border-amber-400' : 'border-slate-200'} rounded-lg px-3 py-2 text-sm font-normal text-slate-700 outline-none hover:border-teal-500 transition-all`}>
+                    <option value="Select" disabled>Select Source</option>
                     <option value="Walk-in">Walk-in</option>
                     <option value="WhatsApp">WhatsApp</option>
                     <option value="Instagram">Instagram</option>
