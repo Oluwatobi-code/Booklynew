@@ -19,12 +19,11 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 
-// Use initializeFirestore for advanced configuration
+// Use initializeFirestore for advanced configuration with robust fallback
 export const db = initializeFirestore(app, {
     localCache: persistentLocalCache({
         tabManager: persistentMultipleTabManager()
-    }),
-    experimentalForceLongPolling: true, // More stable for mobile networks
+    })
 });
 
 export default app;
