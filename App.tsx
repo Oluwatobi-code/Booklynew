@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Capacitor, registerPlugin } from '@capacitor/core';
 import { AppState, BusinessProfile, Order, Product, Customer, Expense } from './types';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
@@ -31,15 +32,26 @@ const DEFAULT_STATE: AppState = {
   customers: [],
   expenses: [],
   isOnline: navigator.onLine,
-  settings: { showFab: true, soundEnabled: false }
+  settings: {
+    showFab: true,
+    soundEnabled: false,
+    hoverBotApps: {
+      whatsapp: true,
+      instagram: true,
+      facebook: true,
+      tiktok: true
+    }
+  }
 };
 
 const App: React.FC = () => {
   const [state, setState] = useState<AppState>(DEFAULT_STATE);
+
   const [activeTab, setActiveTab] = useState('dashboard');
   const [showFabMenu, setShowFabMenu] = useState(false);
   const [authChecked, setAuthChecked] = useState(false);
   const [syncStatus, setSyncStatus] = useState<'synced' | 'syncing' | 'error'>('synced');
+  const [permissionStatus, setPermissionStatus] = useState({ overlay: false, accessibility: false });
 
   // Modals
   const [showManualSale, setShowManualSale] = useState(false);
@@ -80,6 +92,46 @@ const App: React.FC = () => {
   const [aiInputText, setAiInputText] = useState('');
   const [isProcessingAI, setIsProcessingAI] = useState(false);
 
+  // HoverBot Bridge
+  useEffect(() => {
+    if (Capacitor.isNativePlatform()) {
+      const ScreenReader = registerPlugin<any>('ScreenReader');
+
+      const listener = ScreenReader.addListener('onOrderTextCaptured', (data: { text: string }) => {
+        if (data.text) {
+          setAiInputText(data.text);
+          setShowAICapture(true);
+          setShowManualSale(false);
+        }
+      });
+
+      return () => {
+        listener.remove();
+      };
+    }
+  }, []);
+
+  // Periodic Permission Check
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+
+    const check = async () => {
+      const ScreenReader = registerPlugin<any>('ScreenReader');
+      try {
+        const status = await ScreenReader.checkPermissions();
+        setPermissionStatus(status);
+      } catch (e) {
+        console.error('Failed to check permissions:', e);
+      }
+    };
+
+    check();
+
+    // Check more frequently when on Settings page
+    const interval = setInterval(check, activeTab === 'settings' ? 2000 : 10000);
+    return () => clearInterval(interval);
+  }, [activeTab]);
+
   // Receipt Modal State
   const [receiptOrder, setReceiptOrder] = useState<Order | null>(null);
 
@@ -87,6 +139,24 @@ const App: React.FC = () => {
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isLoadingData = useRef(false);
   const suggestionsRef = useRef<HTMLDivElement>(null);
+
+  // Sync HoverBot Settings to Native
+  useEffect(() => {
+    if (Capacitor.isNativePlatform() && state.settings.hoverBotApps) {
+      const ScreenReader = registerPlugin<any>('ScreenReader');
+
+      // Map user-friendly names to actual Android package names for the native hook
+      const packageMapping = {
+        'com.whatsapp': state.settings.hoverBotApps.whatsapp,
+        'com.instagram.android': state.settings.hoverBotApps.instagram,
+        'com.facebook.katana': state.settings.hoverBotApps.facebook,
+        'com.facebook.orca': state.settings.hoverBotApps.facebook, // Messenger
+        'com.tiktok.android': state.settings.hoverBotApps.tiktok,
+      };
+
+      ScreenReader.syncSettings({ hoverBotApps: packageMapping });
+    }
+  }, [state.settings.hoverBotApps]);
 
   // --- Click outside suggestion list to close ---
   useEffect(() => {
@@ -540,7 +610,40 @@ const App: React.FC = () => {
       case 'inventory': return <Inventory state={state} onUpdateProducts={(p) => setState(prev => ({ ...prev, products: p }))} />;
       case 'customers': return <Customers state={state} onAddCustomer={(c) => setState(prev => ({ ...prev, customers: [c, ...prev.customers] }))} />;
       case 'expenses': return <Expenses state={state} onAddExpense={addExpense} />;
-      case 'settings': return <Settings profile={state.profile} settings={state.settings} onUpdateProfile={(p) => setState(prev => ({ ...prev, profile: p }))} onUpdateSettings={(s) => setState(prev => ({ ...prev, settings: s }))} onLogout={handleLogout} />;
+      case 'settings': return (
+        <Settings
+          profile={state.profile}
+          settings={state.settings}
+          onUpdateProfile={(p) => setState(prev => ({ ...prev, profile: p }))}
+          onUpdateSettings={(s) => setState(prev => ({ ...prev, settings: s }))}
+          onRequestOverlayPermission={async () => {
+            if (Capacitor.isNativePlatform()) {
+              const ScreenReader = registerPlugin<any>('ScreenReader');
+              try {
+                await ScreenReader.requestOverlayPermission();
+              } catch (e) {
+                alert('Failed to open overlay settings. Please find "Display over other apps" in your phone settings.');
+              }
+            } else {
+              alert('Overlay permission is only available on Android.');
+            }
+          }}
+          onRequestAccessibilityPermission={async () => {
+            if (Capacitor.isNativePlatform()) {
+              const ScreenReader = registerPlugin<any>('ScreenReader');
+              try {
+                await ScreenReader.requestAccessibilityPermission();
+              } catch (e) {
+                alert('Failed to open accessibility settings. Please find "Accessibility" -> "Installed Services" in your phone settings.');
+              }
+            } else {
+              alert('Accessibility permission is only available on Android.');
+            }
+          }}
+          permissionStatus={permissionStatus}
+          onLogout={handleLogout}
+        />
+      );
       default: return <Dashboard state={state} onNav={setActiveTab} />;
     }
   };
