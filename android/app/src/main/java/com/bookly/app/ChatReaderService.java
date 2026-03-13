@@ -6,6 +6,7 @@ import android.accessibilityservice.AccessibilityServiceInfo;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.os.Build;
 import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityNodeInfo;
 
@@ -27,20 +28,7 @@ public class ChatReaderService extends AccessibilityService {
 
     @Override
     public void onAccessibilityEvent(AccessibilityEvent event) {
-        if (event.getEventType() == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
-            CharSequence packageName = event.getPackageName();
-            if (packageName != null && socialApps.contains(packageName.toString())) {
-                SharedPreferences sharedPreferences = getSharedPreferences("HoverBotPrefs", Context.MODE_PRIVATE);
-                boolean isEnabled = sharedPreferences.getBoolean(packageName.toString(), false);
-                if (isEnabled) {
-                    HoverBotService.showBubble(this);
-                } else {
-                    HoverBotService.hideBubble(this);
-                }
-            } else {
-                HoverBotService.hideBubble(this);
-            }
-        }
+        // Handled by captureCurrentScreen() when triggered
     }
 
     public static void captureCurrentScreen() {
@@ -49,8 +37,8 @@ public class ChatReaderService extends AccessibilityService {
             if (rootNode != null) {
                 // Security Check: Only read if the current app is in our allowed whitelist
                 CharSequence packageName = rootNode.getPackageName();
-                SharedPreferences sharedPreferences = instance.getSharedPreferences("HoverBotPrefs", Context.MODE_PRIVATE);
-                boolean isEnabled = sharedPreferences.getBoolean(packageName.toString(), false);
+                SharedPreferences sharedPreferences = instance.getSharedPreferences("AppSettingsPrefs", Context.MODE_PRIVATE);
+                boolean isEnabled = sharedPreferences.getBoolean(packageName.toString(), true);
 
                 if (isEnabled) {
                     StringBuilder capturedText = new StringBuilder();
@@ -83,10 +71,6 @@ public class ChatReaderService extends AccessibilityService {
         super.onServiceConnected();
         instance = this;
 
-        // Start the HoverBotService to ensure it's running
-        Intent intent = new Intent(this, HoverBotService.class);
-        startService(intent);
-
         AccessibilityServiceInfo info = new AccessibilityServiceInfo();
         info.eventTypes = AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED;
         info.feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC;
@@ -98,8 +82,6 @@ public class ChatReaderService extends AccessibilityService {
     @Override
     public void onDestroy() {
         super.onDestroy();
-        Intent intent = new Intent(this, HoverBotService.class);
-        stopService(intent);
         instance = null;
     }
 }

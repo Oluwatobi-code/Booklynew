@@ -76,11 +76,5 @@ export interface AppState {
   settings: {
     showFab: boolean;
     soundEnabled: boolean;
-    hoverBotApps?: {
-      whatsapp: boolean;
-      instagram: boolean;
-      facebook: boolean;
-      tiktok: boolean;
-    };
   };
 }
