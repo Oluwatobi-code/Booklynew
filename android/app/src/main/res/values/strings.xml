@@ -1,0 +1,8 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Bookly</string>
+    <string name="title_activity_main">Bookly</string>
+    <string name="package_name">com.bookly.app</string>
+    <string name="custom_url_scheme">com.bookly.app</string>
+    <string name="accessibility_service_description">This service reads chat content to process orders.</string>
+</resources>

@@ -4,13 +4,22 @@ import { BusinessProfile } from '../types';
 
 interface SettingsProps {
   profile: BusinessProfile;
-  settings: { showFab: boolean; soundEnabled: boolean };
+  settings: {
+    showFab: boolean;
+    soundEnabled: boolean;
+  };
   onUpdateProfile: (profile: BusinessProfile) => void;
-  onUpdateSettings: (settings: { showFab: boolean; soundEnabled: boolean }) => void;
+  onUpdateSettings: (settings: any) => void;
   onLogout: () => void;
 }
 
-const Settings: React.FC<SettingsProps> = ({ profile, settings, onUpdateProfile, onUpdateSettings, onLogout }) => {
+const Settings: React.FC<SettingsProps> = ({
+  profile,
+  settings,
+  onUpdateProfile,
+  onUpdateSettings,
+  onLogout
+}) => {
   return (
     <div className="p-6 space-y-8 pb-20">
       <div className="flex justify-between items-center">
@@ -46,30 +55,6 @@ const Settings: React.FC<SettingsProps> = ({ profile, settings, onUpdateProfile,
             <option value="EUR">EUR (€)</option>
           </select>
         </div>
-      </div>
-
-      {/* App Preferences Section */}
-      <div className="bg-white rounded-[24px] p-6 border border-slate-100 shadow-sm space-y-5">
-        <div className="flex items-center gap-3 border-b border-slate-50 pb-3">
-          <div className="w-8 h-8 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-600">
-            <i className="fa-solid fa-sliders"></i>
-          </div>
-          <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Preferences</h3>
-        </div>
-
-        <ToggleField
-          label="Floating Action Button"
-          desc="Show the quick action button on all screens"
-          active={settings.showFab}
-          onToggle={() => onUpdateSettings({ ...settings, showFab: !settings.showFab })}
-        />
-
-        <ToggleField
-          label="Sound Effects"
-          desc="Play sounds on success/error"
-          active={settings.soundEnabled}
-          onToggle={() => onUpdateSettings({ ...settings, soundEnabled: !settings.soundEnabled })}
-        />
       </div>
 
       <div className="text-center space-y-2 pt-4 opacity-50">
